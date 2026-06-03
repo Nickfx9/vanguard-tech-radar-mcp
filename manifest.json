@@ -1,0 +1,84 @@
+{
+  "schema_version": "0.3",
+  "name": "vanguard-tech-radar",
+  "display_name": "Vanguard Tech Radar",
+  "version": "0.1.0",
+  "description": "Track fresh technology trends, repos, models, research, events, and opportunities.",
+  "long_description": "Vanguard Tech Radar is a local MCP server for surfacing high-signal technology trends, GitHub repositories, company announcements, Hugging Face models, arXiv research, developer opportunities, and daily actionable briefings.",
+  "author": {
+    "name": "Vanguard MCP"
+  },
+  "server": {
+  "type": "node",
+  "command": "node",
+  "args": ["build/index.js"],
+  "env": {
+    "GITHUB_TOKEN": "${user_config.github_token}"
+  }
+},
+  "tools": [
+    {
+      "name": "latest_tech_trends",
+      "description": "Get ranked, fresh technology trends from GitHub, Hacker News, and major company engineering/AI blogs."
+    },
+    {
+      "name": "github_trending_repos",
+      "description": "Find high-signal GitHub repositories related to AI, agents, MCP, developer tools, and emerging tech."
+    },
+    {
+      "name": "company_announcements",
+      "description": "Fetch recent announcements from major technology company blogs and developer feeds."
+    },
+    {
+      "name": "developer_opportunities",
+      "description": "Surface opportunities such as hackathons, grants, accelerator programs, beta access, previews, and developer challenges."
+    },
+    {
+      "name": "watch_new_tech_signals",
+      "description": "Return only newly seen technology signals using a local cache."
+    },
+    {
+      "name": "analyze_tech_impact",
+      "description": "Explain why a trend or repo matters, what opportunities it unlocks, and who should care."
+    },
+    {
+      "name": "models_and_research",
+      "description": "Find relevant Hugging Face models and arXiv research papers, with practical impact notes."
+    },
+    {
+      "name": "daily_tech_briefing",
+      "description": "Create a daily radar briefing with top trends, repos, company announcements, models/research, opportunities, and recommended actions."
+    }
+  ],
+  "keywords": ["mcp", "technology", "trends", "github", "ai", "agents", "developer-tools"],
+  "license": "ISC",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "user_config": {
+    "github_token": {
+      "type": "string",
+      "title": "GitHub token",
+      "description": "Optional token for higher GitHub API limits.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "privacy_policies": [
+    "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
+    "https://www.ycombinator.com/legal/privacy",
+    "https://openai.com/policies/privacy-policy",
+    "https://policies.google.com/privacy",
+    "https://privacy.microsoft.com/privacystatement",
+    "https://www.nvidia.com/en-us/about-nvidia/privacy-policy/",
+    "https://www.aboutamazon.com/privacy",
+    "https://huggingface.co/privacy",
+    "https://info.arxiv.org/help/policies/privacy_policy.html",
+    "https://www.producthunt.com/privacy",
+    "https://devpost.com/privacy"
+  ]
+}

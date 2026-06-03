@@ -1,0 +1,24 @@
+{
+  "name": "vanguard-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "mcp": "node build/index.js",
+    "dev": "tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/axios": "^0.9.36",
+    "@types/node": "^25.8.0",
+    "axios": "^1.16.1",
+    "dotenv": "^17.4.2",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  }
+}

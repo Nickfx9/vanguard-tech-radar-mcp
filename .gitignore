@@ -1,0 +1,8 @@
+node_modules/
+build/
+.cache/
+.bundle/
+.inspector/
+dist/
+.env
+npm-debug.log*
