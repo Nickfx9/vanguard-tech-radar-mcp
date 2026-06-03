@@ -14,6 +14,14 @@ import { fetchHuggingFaceModels } from "./sources/huggingface.js";
 import { fetchDeveloperOpportunities } from "./sources/opportunities.js";
 import { fetchProductHuntTrends } from "./sources/producthunt.js";
 import { BriefingSections, TrendItem, TrendQuery } from "./types.js";
+import {
+  watchSignals,
+  getNewSignals,
+  getHistory,
+  addWatchTopic,
+  listWatchTopics,
+  getWatcherStats
+} from "./watcher/index.js";
 
 const inputSchema = {
   query: z.string().optional().describe("Optional topic or company filter, for example 'agent', 'MCP', 'OpenAI', or 'hackathon'."),
@@ -167,6 +175,200 @@ server.registerTool(
   async ({ query, limit, sinceDays }) => {
     const sections = await collectBriefing({ query, limit: Math.min(limit ?? 5, 10), sinceDays });
     return { content: [{ type: "text", text: formatDailyBriefing(sections) }] };
+  }
+);
+
+// ============================================
+// Signal Watcher Tools (SQLite-backed)
+// ============================================
+
+server.registerTool(
+  "watch_signals",
+  {
+    description: "Run the signal watcher to collect signals from all active sources (GitHub trending repos, etc.) and store them in the database. Returns a summary of what was found, including new vs previously seen signals."
+  },
+  async () => {
+    try {
+      const result = await watchSignals();
+      const lines: string[] = [
+        `**Signal Watch Complete** (${result.checkedAt})`,
+        ``,
+        `**Summary:**`,
+        `• Sources checked: ${result.sourcesChecked}`,
+        `• Total signals found: ${result.signalsFound}`,
+        `• New signals: ${result.newSignals}`,
+        `• Updated signals: ${result.updatedSignals}`,
+        ``
+      ];
+
+      for (const detail of result.details) {
+        lines.push(`**${detail.source}** (topic: "${detail.topic}")`);
+        lines.push(`  Found: ${detail.signalsFound} | New: ${detail.newSignals} | Updated: ${detail.updatedSignals}`);
+        if (detail.error) {
+          lines.push(`  ⚠️ Error: ${detail.error}`);
+        }
+        lines.push(``);
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Error running signal watcher: ${error instanceof Error ? error.message : String(error)}` }] };
+    }
+  }
+);
+
+server.registerTool(
+  "new_since_last_check",
+  {
+    description: "Return signals that are new since the last watch_signals run. Shows only signals that were first seen after the most recent previous check."
+  },
+  async () => {
+    try {
+      const { signals, since } = await getNewSignals();
+
+      if (signals.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: since
+              ? `No new signals since ${since}. All current signals have been seen before.`
+              : "No signals in database yet. Run watch_signals first."
+          }]
+        };
+      }
+
+      const lines: string[] = [
+        `**New Signals**${since ? ` (since ${since})` : " (first check)"} — ${signals.length} new`,
+        ``
+      ];
+
+      for (const signal of signals.slice(0, 20)) {
+        lines.push(`• **${signal.title}** (score: ${signal.lastScore})`);
+        lines.push(`  ${signal.url}`);
+        if (signal.summary) {
+          lines.push(`  ${signal.summary}`);
+        }
+        if (signal.tags && signal.tags.length > 0) {
+          lines.push(`  Tags: ${signal.tags.slice(0, 5).join(", ")}`);
+        }
+        lines.push(``);
+      }
+
+      if (signals.length > 20) {
+        lines.push(`... and ${signals.length - 20} more`);
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Error getting new signals: ${error instanceof Error ? error.message : String(error)}` }] };
+    }
+  }
+);
+
+server.registerTool(
+  "signal_history",
+  {
+    description: "Get the score history for a specific signal (by URL). Shows how the signal's relevance score has changed over time.",
+    inputSchema: {
+      url: z.string().describe("The URL of the signal to get history for.")
+    }
+  },
+  async ({ url }) => {
+    try {
+      const history = getHistory(url);
+
+      if (history.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: `No history found for URL: ${url}\n\nRun watch_signals first to collect signals, or check that the URL is correct.`
+          }]
+        };
+      }
+
+      const lines: string[] = [
+        `**Score History for:** ${url}`,
+        ``,
+        `**${history.length}** recorded scores:`,
+        ``
+      ];
+
+      for (const entry of history.slice(0, 10)) {
+        lines.push(`• ${entry.scoredAt} — score: ${entry.score}`);
+      }
+
+      if (history.length > 10) {
+        lines.push(`... and ${history.length - 10} more entries`);
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Error getting signal history: ${error instanceof Error ? error.message : String(error)}` }] };
+    }
+  }
+);
+
+server.registerTool(
+  "add_watch_topic",
+  {
+    description: "Add a new topic to watch. The watcher will include this topic in future watch_signals runs.",
+    inputSchema: {
+      topic: z.string().describe("The search topic/keywords to watch, e.g., 'rust wasm' or 'agentic coding'."),
+      source: z.string().optional().describe("The source type to watch (default: 'github'). Currently only 'github' is supported.")
+    }
+  },
+  async ({ topic, source }) => {
+    try {
+      const watchTopic = addWatchTopic(topic, source || "github");
+      return {
+        content: [{
+          type: "text",
+          text: `**Added watch topic:**\n\n• Topic: "${watchTopic.topic}"\n• Source: ${watchTopic.source}\n• ID: ${watchTopic.id}\n• Active: ${watchTopic.isActive}\n\nThis topic will be included in future watch_signals runs.`
+        }]
+      };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Error adding watch topic: ${error instanceof Error ? error.message : String(error)}` }] };
+    }
+  }
+);
+
+server.registerTool(
+  "list_watch_topics",
+  {
+    description: "List all configured watch topics. Shows which topics are being monitored and their status.",
+    inputSchema: {
+      activeOnly: z.boolean().optional().default(true).describe("Whether to only show active topics (default: true).")
+    }
+  },
+  async ({ activeOnly }) => {
+    try {
+      const topics = listWatchTopics(activeOnly);
+      const stats = getWatcherStats();
+
+      const lines: string[] = [
+        `**Watch Topics** — ${topics.length} ${activeOnly ? "active" : "total"} topic(s)`,
+        ``,
+        `**Database Stats:**`,
+        `• Total signals: ${stats.totalSignals}`,
+        `• New today: ${stats.newToday}`,
+        `• Last check: ${stats.lastCheckAt || "never"}`,
+        ``
+      ];
+
+      if (topics.length === 0) {
+        lines.push(`No watch topics configured.`);
+      } else {
+        for (const topic of topics) {
+          lines.push(`• **${topic.topic}**`);
+          lines.push(`  Source: ${topic.source} | ID: ${topic.id} | Active: ${topic.isActive}`);
+          lines.push(``);
+        }
+      }
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Error listing watch topics: ${error instanceof Error ? error.message : String(error)}` }] };
+    }
   }
 );
 
