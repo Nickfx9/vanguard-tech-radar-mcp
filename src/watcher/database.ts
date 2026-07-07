@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import { mkdirSync } from "node:fs";
+import { getDatabaseDir } from "../appPaths.js";
 
 /**
  * Signal Watcher Database Module
@@ -34,8 +35,12 @@ import { mkdirSync } from "node:fs";
  *    - isActive: Whether this topic is currently being watched
  */
 
-const DB_DIR = path.join(process.cwd(), ".data");
+const DB_DIR = getDatabaseDir();
 const DB_PATH = path.join(DB_DIR, "signals.db");
+
+export function getDatabasePath(): string {
+  return DB_PATH;
+}
 
 let db: Database.Database | null = null;
 

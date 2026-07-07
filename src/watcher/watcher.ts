@@ -6,6 +6,7 @@ import {
   listWatchTopics as dbListWatchTopics,
   getLastCheckTime,
   getStats,
+  getDatabasePath,
   Signal,
   WatchTopic
 } from "./database.js";
@@ -161,6 +162,7 @@ export function getWatcherStats() {
   const lastCheck = getLastCheckTime();
   return {
     ...stats,
-    lastCheckAt: lastCheck
+    lastCheckAt: lastCheck,
+    databasePath: getDatabasePath()
   };
 }

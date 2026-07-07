@@ -33,14 +33,20 @@ const opportunityWords = [
 
 export async function fetchDeveloperOpportunities(query: TrendQuery = {}): Promise<TrendItem[]> {
   const items = await fetchFeeds(opportunityFeeds, 10);
-  const topic = query.query?.toLowerCase();
-  return items
+  const topicTerms = query.query
+    ?.toLowerCase()
+    .split(/\s+|\s+or\s+|,|;/i)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 2 && !opportunityWords.includes(term));
+
+  const filtered = items
     .filter((item) => {
       const text = `${item.title} ${item.summary ?? ""} ${item.source}`.toLowerCase();
-      const matchesTopic = !topic || text.includes(topic) || item.tags.some((tag) => tag.toLowerCase().includes(topic));
+      const matchesTopic = !topicTerms?.length || topicTerms.some((term) => text.includes(term) || item.tags.some((tag) => tag.toLowerCase().includes(term)));
       const matchesOpportunity = opportunityWords.some((word) => text.includes(word)) || item.category === "developer-opportunity";
       return matchesTopic && matchesOpportunity;
     })
     .slice(0, query.limit ?? 20);
-}
 
+  return filtered.length ? filtered : items.slice(0, query.limit ?? 20);
+}

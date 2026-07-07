@@ -51,7 +51,7 @@ async function collectAll(query: TrendQuery): Promise<TrendItem[]> {
 
 async function collectBriefing(query: TrendQuery): Promise<BriefingSections> {
   const limit = query.limit ?? 5;
-  const [trends, repos, announcements, models, research, opportunities] = await Promise.all([
+  const [trends, repos, announcements, models, research, opportunities] = await Promise.allSettled([
     collectAll({ ...query, limit: limit * 2 }),
     fetchGitHubTrends({ ...query, limit }),
     fetchCompanyAnnouncements({ ...query, limit }),
@@ -61,11 +61,14 @@ async function collectBriefing(query: TrendQuery): Promise<BriefingSections> {
   ]);
 
   return {
-    trends: rankTrends(trends.filter((item) => matchesQuery(item, query.query)), limit),
-    repos: rankTrends(repos, limit),
-    announcements: rankTrends(announcements, limit),
-    modelsAndResearch: rankTrends([...models, ...research], limit),
-    opportunities: rankTrends(opportunities, limit)
+    trends: rankTrends((trends.status === "fulfilled" ? trends.value : []).filter((item) => matchesQuery(item, query.query)), limit),
+    repos: rankTrends(repos.status === "fulfilled" ? repos.value : [], limit),
+    announcements: rankTrends(announcements.status === "fulfilled" ? announcements.value : [], limit),
+    modelsAndResearch: rankTrends([
+      ...(models.status === "fulfilled" ? models.value : []),
+      ...(research.status === "fulfilled" ? research.value : [])
+    ], limit),
+    opportunities: rankTrends(opportunities.status === "fulfilled" ? opportunities.value : [], limit)
   };
 }
 
@@ -158,11 +161,22 @@ server.registerTool(
     inputSchema
   },
   async ({ query, limit, sinceDays }) => {
-    const items = rankTrends(
-      [...(await fetchHuggingFaceModels({ query, limit, sinceDays })), ...(await fetchArxivResearch({ query, limit, sinceDays }))],
-      limit
-    );
-    return { content: [{ type: "text", text: formatTrendItems(items, { actionable: true }) }] };
+    const [models, research] = await Promise.allSettled([
+      fetchHuggingFaceModels({ query, limit, sinceDays }),
+      fetchArxivResearch({ query, limit, sinceDays })
+    ]);
+    const items = rankTrends([
+      ...(models.status === "fulfilled" ? models.value : []),
+      ...(research.status === "fulfilled" ? research.value : [])
+    ], limit);
+    const warnings = [
+      models.status === "rejected" ? `Hugging Face unavailable/rate-limited: ${models.reason instanceof Error ? models.reason.message : String(models.reason)}` : "",
+      research.status === "rejected" ? `arXiv unavailable: ${research.reason instanceof Error ? research.reason.message : String(research.reason)}` : ""
+    ].filter(Boolean);
+    const text = [warnings.length ? `Warnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : "", formatTrendItems(items, { actionable: true })]
+      .filter(Boolean)
+      .join("\n");
+    return { content: [{ type: "text", text }] };
   }
 );
 
@@ -352,6 +366,7 @@ server.registerTool(
         `• Total signals: ${stats.totalSignals}`,
         `• New today: ${stats.newToday}`,
         `• Last check: ${stats.lastCheckAt || "never"}`,
+        `• Database: ${stats.databasePath}`,
         ``
       ];
 

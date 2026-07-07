@@ -25,7 +25,8 @@ export {
   removeWatchTopic,
   getLastCheckTime,
   getStats,
-  closeDatabase
+  closeDatabase,
+  getDatabasePath
 } from "./database.js";
 
 // Watcher exports (includes addWatchTopic and listWatchTopics with watcher logic)

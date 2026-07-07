@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getCacheDir } from "./appPaths.js";
 import { TrendItem } from "./types.js";
 
-const cacheDir = path.join(process.cwd(), ".cache");
+const cacheDir = getCacheDir();
 const seenFile = path.join(cacheDir, "seen-trends.json");
 
 type SeenCache = Record<string, string>;
@@ -28,4 +29,3 @@ export async function markAndFilterNew(items: TrendItem[]): Promise<TrendItem[]>
   await writeFile(seenFile, JSON.stringify(seen, null, 2));
   return fresh;
 }
-
