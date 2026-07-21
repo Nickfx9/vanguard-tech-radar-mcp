@@ -26,6 +26,14 @@
       "description": "Find high-signal GitHub repositories related to AI, agents, MCP, developer tools, and emerging tech."
     },
     {
+      "name": "analyze_github_repo",
+      "description": "Analyze a GitHub repository using metadata, README excerpt, detected stack files, topics, and stars."
+    },
+    {
+      "name": "repo_health_check",
+      "description": "Check GitHub repository maintenance health using recent commits, issue ratio, and latest release age."
+    },
+    {
       "name": "company_announcements",
       "description": "Fetch recent announcements from major technology company blogs and developer feeds."
     },

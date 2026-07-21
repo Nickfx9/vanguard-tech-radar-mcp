@@ -9,6 +9,7 @@ import { matchesQuery, rankTrends } from "./scoring.js";
 import { fetchArxivResearch } from "./sources/arxiv.js";
 import { fetchCompanyAnnouncements } from "./sources/companyBlogs.js";
 import { fetchGitHubTrends } from "./sources/github.js";
+import { analyzeGitHubRepo, repoHealthCheck } from "./sources/githubRepo.js";
 import { fetchHackerNewsTrends } from "./sources/hackernews.js";
 import { fetchHuggingFaceModels } from "./sources/huggingface.js";
 import { fetchDeveloperOpportunities } from "./sources/opportunities.js";
@@ -33,6 +34,10 @@ const impactInputSchema = {
   topic: z.string().describe("The trend, repository, announcement, or technology to analyze."),
   context: z.string().optional().describe("Optional extra context such as a URL, summary, repo description, or your goal."),
   audience: z.string().optional().describe("Optional audience, for example founder, developer, researcher, student, or investor.")
+};
+
+const repoInputSchema = {
+  repo_url: z.string().describe("GitHub repository URL or shorthand, for example https://github.com/modelcontextprotocol/typescript-sdk or owner/repo.")
 };
 
 async function collectAll(query: TrendQuery): Promise<TrendItem[]> {
@@ -98,6 +103,28 @@ server.registerTool(
   async ({ query, limit, sinceDays }) => {
     const items = rankTrends(await fetchGitHubTrends({ query, limit, sinceDays }), limit);
     return { content: [{ type: "text", text: formatTrendItems(items, { actionable: true }) }] };
+  }
+);
+
+server.registerTool(
+  "analyze_github_repo",
+  {
+    description: "Analyze a GitHub repository using repo metadata, README excerpt, detected stack files, topics, and stars. No LLM calls.",
+    inputSchema: repoInputSchema
+  },
+  async ({ repo_url }) => {
+    return { content: [{ type: "text", text: await analyzeGitHubRepo(repo_url) }] };
+  }
+);
+
+server.registerTool(
+  "repo_health_check",
+  {
+    description: "Check GitHub repository maintenance health using commits from the last 30 days, issue ratio, and latest release age.",
+    inputSchema: repoInputSchema
+  },
+  async ({ repo_url }) => {
+    return { content: [{ type: "text", text: await repoHealthCheck(repo_url) }] };
   }
 );
 
