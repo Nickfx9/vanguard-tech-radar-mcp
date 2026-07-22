@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
+    "postinstall": "npm run build",
     "start": "node build/index.js",
     "mcp": "node build/index.js",
     "dev": "tsc -w"
