@@ -1,6 +1,8 @@
 import "dotenv/config";
+import express from "express";
+import { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as z from "zod/v4";
 import { markAndFilterNew } from "./cache.js";
 import { formatDailyBriefing, formatTrendItems } from "./formatting.js";
@@ -203,7 +205,7 @@ server.registerTool(
     const text = [warnings.length ? `Warnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : "", formatTrendItems(items, { actionable: true })]
       .filter(Boolean)
       .join("\n");
-    return { content: [{ type: "text", text }] };
+    return { content: [{ type: "text", text: text }] };
   }
 );
 
@@ -415,8 +417,65 @@ server.registerTool(
 );
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const app = express();
+  app.use(express.json());
+
+  // Lazy-initialized SSE transport instance
+  let transport: any | undefined;
+
+  // GET /sse: initialize the SSE transport (points to /messages endpoint)
+  app.get("/sse", async (req: express.Request, res: express.Response) => {
+    try {
+      if (!transport) {
+        // SSEServerTransport expects (endpoint, ServerResponse, options?)
+        transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
+        await transport.start();
+        // connect the transport to the MCP server so it can send/receive messages
+        await server.connect(transport);
+      }
+
+      // Informational response; clients will connect to the /messages endpoint
+      res.status(200).send("SSE transport initialized. Connect to /messages for events.");
+    } catch (err) {
+      console.error("Failed to initialize SSE transport:", err);
+      res.status(500).send("Failed to initialize SSE transport");
+    }
+  });
+
+  // POST /messages: forward client payloads to the transport for handling
+  app.post("/messages", async (req: express.Request, res: express.Response) => {
+    if (!transport) {
+      res.status(503).send("Transport not initialized; call GET /sse first.");
+      return;
+    }
+
+    try {
+      // Use handlePostMessage which accepts IncomingMessage + ServerResponse
+      if (typeof transport.handlePostMessage === "function") {
+        await transport.handlePostMessage(req as unknown as IncomingMessage, res as unknown as ServerResponse, req.body);
+        // handlePostMessage is expected to end the response
+      } else if (typeof transport.handleMessage === "function") {
+        // fallback: pass the parsed body into handleMessage
+        await transport.handleMessage(req.body);
+        res.status(204).end();
+      } else {
+        res.status(501).send("Transport does not implement POST handling");
+      }
+    } catch (err) {
+      console.error("Error handling /messages payload:", err);
+      res.status(500).send("Error handling message");
+    }
+  });
+
+  // Health check for Render and other platforms
+  app.get("/health", (_req: express.Request, res: express.Response) => {
+    res.status(200).send("ok");
+  });
+
+  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+  app.listen(port, () => {
+    console.log(`Vanguard Tech Radar MCP listening on port ${port}`);
+  });
 }
 
 main().catch((error) => {
