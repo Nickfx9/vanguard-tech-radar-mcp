@@ -429,8 +429,7 @@ async function main() {
       if (!transport) {
         // SSEServerTransport expects (endpoint, ServerResponse, options?)
         transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
-        await transport.start();
-        // connect the transport to the MCP server so it can send/receive messages
+        // connect() already starts the transport internally, so do not call start() manually
         await server.connect(transport);
       }
 
@@ -463,7 +462,9 @@ async function main() {
       }
     } catch (err) {
       console.error("Error handling /messages payload:", err);
-      res.status(500).send("Error handling message");
+      if (!res.headersSent) {
+        res.status(500).send("Error handling message");
+      }
     }
   });
 
