@@ -429,12 +429,24 @@ async function main() {
       if (!transport) {
         // SSEServerTransport expects (endpoint, ServerResponse, options?)
         transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
+        transport.onclose = () => {
+          transport = undefined;
+        };
         // connect() already starts the transport internally and owns the response
         await server.connect(transport);
         return;
       }
 
-      // A second /sse request should not reuse the existing SSE response stream.
+      // If the previous transport closed, allow a fresh /sse connection.
+      if (typeof transport._sseResponse === "undefined") {
+        transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
+        transport.onclose = () => {
+          transport = undefined;
+        };
+        await server.connect(transport);
+        return;
+      }
+
       if (!res.headersSent) {
         res.status(409).send("SSE transport is already initialized.");
       }
