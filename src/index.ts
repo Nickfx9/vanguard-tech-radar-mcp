@@ -429,15 +429,20 @@ async function main() {
       if (!transport) {
         // SSEServerTransport expects (endpoint, ServerResponse, options?)
         transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
-        // connect() already starts the transport internally, so do not call start() manually
+        // connect() already starts the transport internally and owns the response
         await server.connect(transport);
+        return;
       }
 
-      // Informational response; clients will connect to the /messages endpoint
-      res.status(200).send("SSE transport initialized. Connect to /messages for events.");
+      // A second /sse request should not reuse the existing SSE response stream.
+      if (!res.headersSent) {
+        res.status(409).send("SSE transport is already initialized.");
+      }
     } catch (err) {
       console.error("Failed to initialize SSE transport:", err);
-      res.status(500).send("Failed to initialize SSE transport");
+      if (!res.headersSent) {
+        res.status(500).send("Failed to initialize SSE transport");
+      }
     }
   });
 
